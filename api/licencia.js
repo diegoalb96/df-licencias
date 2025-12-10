@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
+// 🔥 Usa variables de entorno de Vercel
 const supabase = createClient(
-  process.env.SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
@@ -16,34 +17,19 @@ export default async function handler(req, res) {
     return res.status(200).send("ERROR: Missing parameters");
   }
 
-  // 🔎 1. Buscar licencia por email
+  // Buscar licencia en Supabase
   const { data, error } = await supabase
     .from("Licencias indicador CFDs")
     .select("*")
     .eq("email", email)
-    .maybeSingle();
+    .single();
 
   if (error || !data) {
     return res.status(200).send("ERROR: Email not registered");
   }
 
-  const licencia = data;
-
-  // ⚠️ 2. Revisar estado
-  if (licencia.estado !== "activo") {
-    return res.status(200).send("ERROR: License disabled");
-  }
-
-  // ⚠️ 3. Revisar expiración
-  const today = new Date();
-  const expDate = new Date(licencia.expiracion);
-
-  if (today > expDate) {
-    return res.status(200).send("ERROR: License expired");
-  }
-
-  // ⚠️ 4. Si no tiene HWID, se asigna automáticamente
-  if (!licencia.hwid || licencia.hwid === "") {
+  // Si no tiene HWID aún → guardar automáticamente el primero
+  if (!data.hwid || data.hwid === "") {
     await supabase
       .from("Licencias indicador CFDs")
       .update({ hwid })
@@ -52,11 +38,22 @@ export default async function handler(req, res) {
     return res.status(200).send("OK");
   }
 
-  // ⚠️ 5. Si el HWID no coincide, error
-  if (licencia.hwid !== hwid) {
+  // HWID no coincide
+  if (data.hwid !== hwid) {
     return res.status(200).send("ERROR: HWID mismatch");
   }
 
-  // ✅ Si todo está bien
+  // Estado bloqueado
+  if (data.estado !== "activo") {
+    return res.status(200).send("ERROR: License inactive");
+  }
+
+  // Expiración
+  const today = new Date().toISOString().split("T")[0];
+  if (data.expiracion && data.expiracion < today) {
+    return res.status(200).send("ERROR: License expired");
+  }
+
+  // TODO correcto
   return res.status(200).send("OK");
 }

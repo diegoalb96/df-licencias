@@ -32,7 +32,6 @@ export default async function handler(req, res) {
         .from("licencias_indicador_cfds")
         .update({ hwid })
         .eq("email", email);
-        .select();
 
       return res.status(200).send("OK");
     }
